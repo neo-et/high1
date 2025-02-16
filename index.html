@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>지문 단어 퀴즈</title>
+  <style>
+    body {
+      background: #f2f2f2;
+      font-family: sans-serif;
+      margin: 0; 
+      padding: 0;
+      display: flex; 
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    #quiz-container {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      max-width: 600px;
+      width: 90%;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .question-area {
+      margin-bottom: 20px;
+    }
+    .question-area p {
+      font-size: 18px;
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    .choices {
+      list-style: none;
+      padding: 0;
+    }
+    .choices li {
+      margin-bottom: 10px;
+    }
+    .choices button {
+      width: 100%;
+      padding: 10px;
+      cursor: pointer;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      background: #fff;
+      text-align: left;
+      transition: background-color 0.2s;
+    }
+    .choices button:hover {
+      background-color: #eef;
+    }
+    .feedback {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    .hidden {
+      display: none;
+    }
+    .center {
+      text-align: center;
+    }
+    #next-btn, #restart-btn {
+      display: inline-block;
+      padding: 10px 20px;
+      margin-top: 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      background-color: #28a745;
+      color: #fff;
+      font-size: 16px;
+    }
+    #next-btn:hover, #restart-btn:hover {
+      background-color: #218838;
+    }
+  </style>
+</head>
+<body>
+<div id="quiz-container">
+  <h1>단어 퀴즈</h1>
+  
+  <div id="quiz-start" class="center">
+    <p>지문에서 뽑은 단어들로 문제를 만들어봤어요.<br>
+       시작하기 버튼을 누르면 퀴즈가 진행됩니다.</p>
+    <button id="start-btn">시작하기</button>
+  </div>
+  
+  <div id="quiz-game" class="hidden">
+    <div class="question-area">
+      <!-- 문제: (단어 + 품사) or (뜻) 를 보여줄 부분 -->
+      <p id="question-text"></p>
+    </div>
+    <ul class="choices" id="choices-list">
+      <!-- 선택지 버튼들 동적 생성 -->
+    </ul>
+    <div class="feedback" id="feedback-area"></div>
+    <div class="center">
+      <button id="next-btn" class="hidden">다음 문제</button>
+    </div>
+  </div>
+  
+  <div id="quiz-end" class="hidden center">
+    <h2>퀴즈 완료</h2>
+    <p id="final-score"></p>
+    <button id="restart-btn">다시 풀기</button>
+  </div>
+</div>
+
+<script>
+  // ======= 문제 데이터 정의 =======
+  // 필요 시, 원하는 단어/뜻/품사로 교체하거나 개수를 늘릴 수 있습니다.
+  const quizData = [
+    { 
+      word: "medium", 
+      partOfSpeech: "noun", 
+      definition: "매체 (정보·통신 등의 전달 수단)" 
+    },
+    { 
+      word: "goggles", 
+      partOfSpeech: "noun", 
+      definition: "고글 (눈 보호용 안경)" 
+    },
+    { 
+      word: "absorb", 
+      partOfSpeech: "verb", 
+      definition: "(지식·정보 등을) 흡수하다, 받아들이다" 
+    },
+    { 
+      word: "shape", 
+      partOfSpeech: "verb", 
+      definition: "형성하다, (모양·특성을) 만들다" 
+    },
+    { 
+      word: "invention", 
+      partOfSpeech: "noun", 
+      definition: "발명품" 
+    },
+    { 
+      word: "appearance", 
+      partOfSpeech: "noun", 
+      definition: "외모, 겉모습" 
+    }
+  ];
+
+  // ======= 전역 변수 =======
+  let currentIndex = 0;  // 현재 문제 인덱스
+  let score = 0;         // 정답 개수
+  let shuffledQuiz = []; // 문제 순서 섞어 저장
+
+  // ======= DOM 요소 =======
+  const quizStart = document.getElementById("quiz-start");
+  const quizGame = document.getElementById("quiz-game");
+  const quizEnd = document.getElementById("quiz-end");
+
+  const startBtn = document.getElementById("start-btn");
+  const nextBtn = document.getElementById("next-btn");
+  const restartBtn = document.getElementById("restart-btn");
+
+  const questionText = document.getElementById("question-text");
+  const choicesList = document.getElementById("choices-list");
+  const feedbackArea = document.getElementById("feedback-area");
+  const finalScore = document.getElementById("final-score");
+
+  // ======= 이벤트 바인딩 =======
+  startBtn.addEventListener("click", startQuiz);
+  nextBtn.addEventListener("click", loadNextQuestion);
+  restartBtn.addEventListener("click", restartQuiz);
+
+  // ======= 퀴즈 시작 함수 =======
+  function startQuiz() {
+    quizStart.classList.add("hidden");
+    quizGame.classList.remove("hidden");
+
+    // 문제 데이터 순서 섞기
+    shuffledQuiz = shuffleArray([...quizData]);
+    currentIndex = 0;
+    score = 0;
+
+    // 첫 문제 로드
+    loadQuestion();
+  }
+
+  // ======= 문제 표시 함수 =======
+  function loadQuestion() {
+    // 현재 문제 객체
+    const currentProblem = shuffledQuiz[currentIndex];
+    // 예시) "medium (noun)" 형태로 표시
+    questionText.textContent = `"${currentProblem.word}" (${currentProblem.partOfSpeech})의 뜻은 무엇일까요?`;
+
+    // 정답(현재 단어의 definition)
+    const correctDefinition = currentProblem.definition;
+
+    // 오답 선택지를 위해 definition만 추출하여 배열화
+    const allDefinitions = quizData.map(item => item.definition);
+
+    // 정답 제외한 오답 후보
+    let wrongChoices = allDefinitions.filter(def => def !== correctDefinition);
+
+    // 오답 후보 무작위에서 3개 추출 (중복 방지)
+    wrongChoices = shuffleArray(wrongChoices).slice(0, 3);
+
+    // 정답 + 오답 3개 합쳐서 다시 섞기
+    let choices = [correctDefinition, ...wrongChoices];
+    choices = shuffleArray(choices);
+
+    // 선택지 UI 생성
+    choicesList.innerHTML = "";
+    choices.forEach((choice) => {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.textContent = choice;
+      btn.addEventListener("click", () => checkAnswer(choice, correctDefinition));
+      li.appendChild(btn);
+      choicesList.appendChild(li);
+    });
+
+    feedbackArea.textContent = "";
+    nextBtn.classList.add("hidden");
+  }
+
+  // ======= 정답 체크 함수 =======
+  function checkAnswer(selected, correct) {
+    // 이미 정답을 맞혔거나 클릭했다면 중복 입력 막기(옵션)
+    // 여기서는 간단히 한 번만 클릭하도록 처리
+
+    if (selected === correct) {
+      feedbackArea.textContent = "정답입니다!";
+      feedbackArea.style.color = "green";
+      score++;
+    } else {
+      feedbackArea.textContent = `오답입니다! 정답: ${correct}`;
+      feedbackArea.style.color = "red";
+    }
+    nextBtn.classList.remove("hidden");
+  }
+
+  // ======= 다음 문제 로드/퀴즈 종료 처리 =======
+  function loadNextQuestion() {
+    currentIndex++;
+    if (currentIndex < shuffledQuiz.length) {
+      loadQuestion();
+    } else {
+      // 퀴즈 종료
+      endQuiz();
+    }
+  }
+
+  // ======= 퀴즈 종료 시 함수 =======
+  function endQuiz() {
+    quizGame.classList.add("hidden");
+    quizEnd.classList.remove("hidden");
+
+    finalScore.textContent = `당신의 점수는 ${score} / ${shuffledQuiz.length} 입니다.`;
+  }
+
+  // ======= 다시 풀기(퀴즈 재시작) =======
+  function restartQuiz() {
+    quizEnd.classList.add("hidden");
+    quizStart.classList.remove("hidden");
+  }
+
+  // ======= 배열 무작위 섞기 유틸 함수 =======
+  function shuffleArray(array) {
+    // Fisher-Yates shuffle
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+  }
+</script>
+</body>
+</html>
